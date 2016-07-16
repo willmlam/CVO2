@@ -358,7 +358,7 @@ int32_t ARE::ARP::DeleteDuplicateFunctions(void)
 	QuickSort((void**)_Functions, _nFunctions, left, right, FunctionComparisonByScope_Greater);
 
 	// delete duplicates; [j] is last good ptr. check [i] against [j]; if equal, delete [j]; otherwise set j=i.
-	int32_t j = 0, i ;
+	int32_t j = 0, i, k ;
 	int32_t nDuplicateFunctions = 0 ;
 	for (i = 1; i < _nFunctions; i++) {
 		ARE::Function *fi = _Functions[i];
@@ -370,8 +370,8 @@ int32_t ARE::ARP::DeleteDuplicateFunctions(void)
 				ApplyFnCombinationOperator(fj->ConstValue(), fi->ConstValue());
 				}
 			else {
-				for (j = 0; j < fi->N(); j++)
-					_Value[fi->Argument(j)] = 0;
+				for (k = 0; k < fi->N(); k++)
+					_Value[fi->Argument(k)] = 0;
 				for (int64_t idx = 0; idx < fi->TableSize(); idx++) {
 					int64_t adr_i = fi->ComputeFnTableAdr(_Value, _K);
 					int64_t adr_j = fj->ComputeFnTableAdr(_Value, _K);
@@ -379,8 +379,8 @@ int32_t ARE::ARP::DeleteDuplicateFunctions(void)
 					ARE::EnumerateNextArgumentsValueCombinationEx(fi->N(), fi->Arguments(), _Value, _K);
 					}
 				// reset value so that we won't later think these are evidence variables
-				for (j = 0; j < fi->N(); j++)
-					_Value[fi->Argument(j)] = -1;
+				for (k = 0; k < fi->N(); k++)
+					_Value[fi->Argument(k)] = -1;
 				}
 			delete _Functions[i]; _Functions[i] = NULL; nDuplicateFunctions++;
 			}
