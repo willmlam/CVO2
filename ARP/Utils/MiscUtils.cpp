@@ -34,8 +34,7 @@ INT64 ARE::GetTimeInMilliseconds(void)
 	t /= 10000 ;
 	return t ;
 #else
-  return std::chrono::duration_cast<std::chrono::milliseconds>(
-		std::chrono::high_resolution_clock::now().time_since_epoch()).count();
+	return std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::high_resolution_clock::now().time_since_epoch()).count();
 #endif
 }
 

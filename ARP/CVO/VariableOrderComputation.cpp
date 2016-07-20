@@ -38,7 +38,7 @@ static void GetCurrentDTsec(char *strDT, time_t & ttNow)
 	strDT[24] = 0 ;
 }
 
-static void GetCurrentDTmsec(char *strDT, INT64 & tNow)
+static void GetCurrentDTmsec(char *strDT, int64_t  & tNow)
 {
 	// get current date/time string so that we can log when stuff is happening
 	if (0 == tNow) tNow = ARE::GetTimeInMilliseconds() ;
@@ -50,7 +50,7 @@ int ARE::VarElimOrderComp::CVOcontext::NoteVarOrderComputationCompletion(int w_I
 	++_nRunsCompleted ;
 	if ((StateSpaceSize==_ObjCode && (G._TotalVarElimComplexity_Log10 < _BestOrder->_Complexity_Log10 || (fabs(G._TotalVarElimComplexity_Log10 - _BestOrder->_Complexity_Log10) < 0.01 && G._VarElimOrderWidth < _BestOrder->_Width))) ||  
 		(Width==_ObjCode && (G._VarElimOrderWidth < _BestOrder->_Width || (G._VarElimOrderWidth == _BestOrder->_Width && G._TotalVarElimComplexity_Log10 < _BestOrder->_Complexity_Log10)))) {
-		INT64 tNow = ARE::GetTimeInMilliseconds() ;
+		int64_t tNow = ARE::GetTimeInMilliseconds() ;
 		if (NULL != _fpLOG) {
 			fprintf(_fpLOG, "\n%I64d worker %2d found better solution : width=%d complexity=%g space(#elements)=%g", tNow, (int) w_IDX, (int) G._VarElimOrderWidth, (double) G._TotalVarElimComplexity_Log10, (double) G._TotalNewFunctionStorageAsNumOfElements_Log10) ;
 			fflush(_fpLOG) ;
@@ -68,6 +68,9 @@ int ARE::VarElimOrderComp::CVOcontext::NoteVarOrderComputationCompletion(int w_I
 		_BestOrder->_TotalNewFunctionStorageAsNumOfElements_Log10 = G._TotalNewFunctionStorageAsNumOfElements_Log10 ;
 		for (int i = 0 ; i < _Problem->N() ; i++) 
 			_BestOrder->_VarListInElimOrder[i] = (G._VarElimOrder)[i] ;
+
+		cout << "\nc status " << (1+_BestOrder->_Width) << ' ' << tNow ;
+		cout << flush ;
 		}
 
 	if (G._VarElimOrderWidth >= 0 && G._VarElimOrderWidth < 1024) {
@@ -104,7 +107,7 @@ static void *WorkerThreadFn(void *X)
 	bestComplexity = best_order._Complexity_Log10 ;
 	}
 
-	INT64 tNow = 0 ;
+	int64_t tNow = 0 ;
 	int res ;
 
 	if (NULL != CVOcontext._fpLOG) {
@@ -171,15 +174,15 @@ static void *WorkerThreadFn(void *X)
 				}
 			}
 // DEBUGGG
-//		printf("\nworker %d finished res=%d; width=%d complexity=%I64d", (int) w->_IDX, (int) res, (int) w->_G->_VarElimOrderWidth, (INT64) w->_G->_TotalVarElimComplexity) ;
+//		printf("\nworker %d finished res=%d; width=%d complexity=%I64d", (int) w->_IDX, (int) res, (int) w->_G->_VarElimOrderWidth, (int64_t) w->_G->_TotalVarElimComplexity) ;
 //		if (NULL != CVOcontext._fpLOG) {
-//			fprintf(CVOcontext._fpLOG, "\nworker %d finished res=%d; width=%d complexity=%I64d", (int) w->_IDX, (int) res, (int) w->_G->_VarElimOrderWidth, (INT64) w->_G->_TotalVarElimComplexity) ;
+//			fprintf(CVOcontext._fpLOG, "\nworker %d finished res=%d; width=%d complexity=%I64d", (int) w->_IDX, (int) res, (int) w->_G->_VarElimOrderWidth, (int64_t) w->_G->_TotalVarElimComplexity) ;
 //			fflush(CVOcontext._fpLOG) ;
 //			}
 		try {
 			ARE::utils::AutoLock lock(CVOcontext._BestOrderMutex) ;
 //GetCurrentDTmsec(strDT, tNow) ;
-//printf("\n%s worker %2d found width=%d complexity=%I64d space(#elements)=%I64d res=%d", strDT, (int) w->_IDX, (int) w->_G->_VarElimOrderWidth, (INT64) w->_G->_TotalVarElimComplexity, (INT64) w->_G->_TotalNewFunctionStorageAsNumOfElements, (int) res) ;
+//printf("\n%s worker %2d found width=%d complexity=%I64d space(#elements)=%I64d res=%d", strDT, (int) w->_IDX, (int) w->_G->_VarElimOrderWidth, (int64_t) w->_G->_TotalVarElimComplexity, (int64_t) w->_G->_TotalNewFunctionStorageAsNumOfElements, (int) res) ;
 			if (0 == res) {
 				CVOcontext.NoteVarOrderComputationCompletion(w->_IDX, *(w->_G)) ;
 				}
@@ -266,7 +269,7 @@ static void *CVOThreadFn(void *X)
 	long stop_signalled = 0 ;
 
 	char strDT[64] ;
-	INT64 tNow = 0 ; // ARE::GetTimeInMilliseconds() ;
+	int64_t tNow = 0 ; // ARE::GetTimeInMilliseconds() ;
 	GetCurrentDTmsec(strDT, tNow) ;
 	if (NULL != context->_fpLOG) {
 		fprintf(context->_fpLOG, "\n%s CVO control thread; start preprocessing ...", strDT) ;
@@ -538,7 +541,7 @@ static void *CVOThreadFn(void *X)
 done :
 	tNow = context->_tEnd = ARE::GetTimeInMilliseconds() ;
 	if (NULL != context->_fpLOG) {
-		fprintf(context->_fpLOG, "\n%I64d CVO control thread; done; time=%I64dmsec ...", tNow, (INT64) (context->_tEnd - context->_tStart)) ;
+		fprintf(context->_fpLOG, "\n%I64d CVO control thread; done; time=%I64dmsec ...", tNow, (int64_t) (context->_tEnd - context->_tStart)) ;
 		fflush(context->_fpLOG) ;
 		}
 //	for (i = 0 ; i < nWorkers ; i++) 
@@ -594,7 +597,7 @@ int ARE::VarElimOrderComp::CVOcontext::RequestStopCVOthread(void)
 {
 	if (0 == _ThreadHandle) {
 		if (NULL != _fpLOG) {
-			INT64 tNowLog = ARE::GetTimeInMilliseconds() ;
+			int64_t tNowLog = ARE::GetTimeInMilliseconds() ;
 			fprintf(_fpLOG, "\n%I64d CVO_th : request stop variable order computation; already stopped ...", tNowLog) ;
 			fflush(_fpLOG) ;
 			}
@@ -620,11 +623,11 @@ int ARE::VarElimOrderComp::CVOcontext::RequestStopCVOthread(void)
 }
 
 
-int ARE::VarElimOrderComp::CVOcontext::StopCVOthread(INT64 TimeoutInMilliseconds)
+int ARE::VarElimOrderComp::CVOcontext::StopCVOthread(int64_t TimeoutInMilliseconds)
 {
 	if (0 == _ThreadHandle) {
 		if (NULL != _fpLOG) {
-			INT64 tNowLog = ARE::GetTimeInMilliseconds() ;
+			int64_t tNowLog = ARE::GetTimeInMilliseconds() ;
 			fprintf(_fpLOG, "\n%I64d CVO_th : stop variable order computation; already stopped ...", tNowLog) ;
 			fflush(_fpLOG) ;
 			}
@@ -639,7 +642,7 @@ int ARE::VarElimOrderComp::CVOcontext::StopCVOthread(INT64 TimeoutInMilliseconds
 		}
 	pthread_mutex_unlock(&stopSignalMutex);
 #endif
-	INT64 tStart = ARE::GetTimeInMilliseconds() ;
+	int64_t tStart = ARE::GetTimeInMilliseconds() ;
 	if (NULL != _fpLOG) {
 		fprintf(_fpLOG, "\n%I64d    CVO_th : stop variable order computation; stop signalled, will wait ...", tStart) ;
 		fflush(_fpLOG) ;
@@ -652,12 +655,12 @@ int ARE::VarElimOrderComp::CVOcontext::StopCVOthread(INT64 TimeoutInMilliseconds
 		SLEEP(50) ;
 		if (0 == _ThreadHandle) 
 			break ;
-		INT64 tNow = ARE::GetTimeInMilliseconds() ;
-		INT64 dt = tNow - tStart ;
+		int64_t tNow = ARE::GetTimeInMilliseconds() ;
+		int64_t dt = tNow - tStart ;
 		if (dt > TimeoutInMilliseconds) {
 			// we asked the thread to stop and waited for it to stop, but it won't stop, so kill the thread.
 			if (NULL != _fpLOG) {
-				INT64 tNowLog = ARE::GetTimeInMilliseconds() ;
+				int64_t tNowLog = ARE::GetTimeInMilliseconds() ;
 				fprintf(_fpLOG, "\n%I64d CVO_th : stop variable order computation, hard kill ...", tNowLog) ;
 				fflush(_fpLOG) ;
 				}
@@ -682,7 +685,7 @@ int ARE::VarElimOrderComp::Compute(
 	ARE::VarElimOrderComp::NextVarPickCriteria algcode,
 	int nthreads, 
 	int nrunstodo, 
-	INT64 TimeLimitInMilliSeconds, 
+	int64_t TimeLimitInMilliSeconds, 
 	int nRP, 
 	double eRP, 
 	bool PerformSingletonConsistencyChecking, 
@@ -704,10 +707,10 @@ int ARE::VarElimOrderComp::Compute(
 	int ret = 1 ;
 
 	char strDT[64] ;
-	INT64 tNow = 0 ;
+	int64_t tNow = 0 ;
 
-	INT64 tStart;
-	INT64 tStopSignalled;
+	int64_t tStart;
+	int64_t tStopSignalled;
 	int i;
 
 	ARE::VarElimOrderComp::CVOcontext *cvocontext = Context ;
@@ -915,8 +918,8 @@ int ARE::VarElimOrderComp::Compute(
 		SLEEP(100) ;
 		if (0 == cvocontext->_ThreadHandle) 
 			break ;
-		INT64 tNow = ARE::GetTimeInMilliseconds() ;
-		INT64 dt = tNow - tStart ;
+		int64_t tNow = ARE::GetTimeInMilliseconds() ;
+		int64_t dt = tNow - tStart ;
 		if (dt < cvocontext->_TimeLimitInMilliSeconds) 
 			continue ;
 		if (0 == tStopSignalled) {
@@ -1116,33 +1119,35 @@ int main(int argc, char* argv[])
 	sigaction(SIGUSR1, &sa, NULL) ;
 #endif
 
-	INT64 TimeLimitInMilliSeconds = 86400000 ;
+	int64_t TimeLimitInMilliSeconds = 86400000 ;
 	int nRP = 8 ; double eRP = 0.5 ;
 	bool PerformSingletonConsistencyChecking = false, EliminateSingletonDomainVariables = file_is_uai ? true : false, earlyterminationofbasic_W = true, earlyterminationofbasic_C = false ;
 	int nThreads2Use = maxNumProcessorThreads > 1 ? maxNumProcessorThreads - 1 : 1 ;
 #ifdef VERBOSE_CVO
-	printf("\nnThreads2Use=%d nrunstodo=%d TimeLimitInMilliSeconds=%lld", (int)nThreads2Use, (int)nrunstodo, (INT64)TimeLimitInMilliSeconds);
+	printf("\nnThreads2Use=%d nrunstodo=%d TimeLimitInMilliSeconds=%lld", (int)nThreads2Use, (int)nrunstodo, (int64_t)TimeLimitInMilliSeconds);
 #endif
 	Context._BestOrder = &BestOrder ;
 	ARE::VarElimOrderComp::CVOcontext *context = &Context ;
-	INT64 tStart = ARE::GetTimeInMilliseconds();
+	int64_t tStart = ARE::GetTimeInMilliseconds();
 	int res = ARE::VarElimOrderComp::Compute(problem_filename,
 		ARE::VarElimOrderComp::Width, ARE::VarElimOrderComp::MinFill, 
 		nThreads2Use, nrunstodo, TimeLimitInMilliSeconds, nRP, eRP,
 		PerformSingletonConsistencyChecking, EliminateSingletonDomainVariables, earlyterminationofbasic_W, earlyterminationofbasic_C, findPracticalVariableOrder, randomGeneratorSeed,
 		BestOrder, context) ;
-	INT64 tEnd = ARE::GetTimeInMilliseconds();
+	int64_t tEnd = ARE::GetTimeInMilliseconds();
 
 #ifdef VERBOSE_CVO
-	printf("\nBEST ORDER width = %d, varElimComplexity = %f, lower bound = %d, nRunsDone = %d/%d, nImprovements = %d, nTrivialVars = %d, runtime = %lldmsec", (int) BestOrder._Width, (double)BestOrder._Complexity_Log10, (int) BestOrder._WidthLowerBound, (int)Context._nRunsStarted, (int)Context._nRunsCompleted, (int) Context._nImprovements, (int) Context._MasterGraph._OrderLength, (INT64) (tEnd - tStart)) ;
+	printf("\nBEST ORDER width = %d, varElimComplexity = %f, lower bound = %d, nRunsDone = %d/%d, nImprovements = %d, nTrivialVars = %d, runtime = %lldmsec", (int) BestOrder._Width, (double)BestOrder._Complexity_Log10, (int) BestOrder._WidthLowerBound, (int)Context._nRunsStarted, (int)Context._nRunsCompleted, (int) Context._nImprovements, (int) Context._MasterGraph._OrderLength, (int64_t) (tEnd - tStart)) ;
 #endif
 
 	// save order
+#ifdef VERBOSE_CVO
 	std::string vofn(problem_filename_wo_dir);
 	std::string::size_type ext_pos = vofn.rfind('.');
 	vofn.erase(ext_pos);
 	vofn += "_var_elim_order.txt";
 	BestOrder.SerializeAsElimOrder(vofn.c_str());
+#endif
 
 	// save best tree decomposition
 	std::string sTD ;

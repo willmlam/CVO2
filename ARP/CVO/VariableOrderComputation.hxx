@@ -32,7 +32,7 @@ enum NextVarPickCriteria
 class ResultSnapShot
 {
 public :
-	INT64 _dt ; // in milliseconds
+	int64_t _dt ; // in milliseconds
 	int _width ;
 	double _complexity ;
 public :
@@ -125,7 +125,7 @@ public :
 	ARE::VarElimOrderComp::NextVarPickCriteria _AlgCode ;
 	int _nThreads ;
 	int _nRunsToDoMin, _nRunsToDoMax ;
-	INT64 _TimeLimitInMilliSeconds ;
+	int64_t _TimeLimitInMilliSeconds ;
 	int _nRandomPick ;
 	double _eRandomPick ;
 	bool _EarlyTerminationOfBasic_W ;
@@ -145,21 +145,21 @@ public :
 	LONG volatile _StopAndExit ;
 	uintptr_t _ThreadHandle ;
 #elif defined (LINUX)
-  INT64 volatile _StopAndExit ;
+	int64_t volatile _StopAndExit ;
 	pthread_t _ThreadHandle ;
 #endif 
 	// INTERNALS
 	// _OriginalGraph = original copy of the problem
 	// _MasterGraph = global copy of the problem; used by all threads as a starting point
 	ARE::Graph _OriginalGraph, _MasterGraph ;
-	INT64 _tStart, _tEnd, _tToStop ;
+	int64_t _tStart, _tEnd, _tToStop ;
 	// AdjVar space is allocated it blocks (each size is TempAdjVarSpaceSize) and here we store ptrs to each block.
 	int _TempAdjVarSpaceSizeExtraArrayN ;
 	ARE::AdjVar *_TempAdjVarSpaceSizeExtraArray[TempAdjVarSpaceSizeExtraArraySize] ;
 	// STATISTICS
 	volatile long _nRunsStarted ;
 	int _nRunsCompleted ;
-	INT64 _Width2CountMap[1024] ; // for widths [0,1023], how many times it was obtained
+	int64_t _Width2CountMap[1024] ; // for widths [0,1023], how many times it was obtained
 	double _Width2MinComplexityMap[1024] ; // for widths [0,1023], log of smallest complexity
 	double _Width2MaxComplexityMap[1024] ; // for widths [0,1023], log of largest complexity
 	int _nImprovements ;
@@ -168,7 +168,7 @@ public :
 	int NoteVarOrderComputationCompletion(int w_IDX, Graph & G) ;
 	int CreateCVOthread(void) ;
 	int RequestStopCVOthread(void) ; // ret=0 means stopped; 1=stop requested, but still running; -1=stop requested before, but still running.
-	int StopCVOthread(INT64 TimeoutInMilliseconds = 10000) ;
+	int StopCVOthread(int64_t TimeoutInMilliseconds = 10000) ;
 	int Reset(void)
 	{
 		_nRunsStarted = 0 ;
@@ -286,7 +286,7 @@ int Compute(
 	ARE::VarElimOrderComp::NextVarPickCriteria algCode, // 0=MinFill, 1=MinDegree, 2=MinComplexity
 	int nThreads, 
 	int nRunsToDo, 
-	INT64 TimeLimitInMilliSeconds, 
+	int64_t TimeLimitInMilliSeconds, 
 	int nRandomPick, 
 	double eRandomPick, 
 	bool PerformSingletonConsistencyChecking, 
