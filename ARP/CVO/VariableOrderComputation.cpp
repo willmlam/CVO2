@@ -69,7 +69,7 @@ int ARE::VarElimOrderComp::CVOcontext::NoteVarOrderComputationCompletion(int w_I
 		for (int i = 0 ; i < _Problem->N() ; i++) 
 			_BestOrder->_VarListInElimOrder[i] = (G._VarElimOrder)[i] ;
 
-		cout << "\nc status " << (1+_BestOrder->_Width) << ' ' << tNow ;
+		cout << "c status " << (1+_BestOrder->_Width) << ' ' << tNow << std::endl ;
 		cout << flush ;
 		}
 
@@ -966,7 +966,7 @@ done :
 }
 
 
-int32_t ARE::VarElimOrderComp::Order::SerializeTreeDecomposition(ARE::ARP & P, bool one_based_indexing, std::string & sOutput)
+int32_t ARE::VarElimOrderComp::Order::SerializeTreeDecomposition(ARE::ARP & P, BucketElimination::MBEworkspace & bews, bool one_based_indexing, bool ConnectedComponents, std::string & sOutput)
 {
 	if (_Width < 0 || _Width >= INT_MAX) {
 		sOutput = "s td 0 0 0" ;
@@ -975,29 +975,70 @@ int32_t ARE::VarElimOrderComp::Order::SerializeTreeDecomposition(ARE::ARP & P, b
 
 	int res_copyorder = P.SetVarElimOrdering(_VarListInElimOrder, _Width) ;
 
-	BucketElimination::MBEworkspace bews ;
 	int res_BEwsInit = bews.Initialize(P, true, NULL, 0) ;
 	if (0 != res_BEwsInit) 
 		return 1 ;
 	int res_BEwsCB = bews.CreateBuckets(true, false, false) ;
 	if (0 != res_BEwsCB) 
 		return 1 ;
-
-	char s[128] ;
-	sprintf(s, "s td %d %d %d", bews.nBuckets(), bews.MaxNumVarsInBucket(), P.N()) ; // s td <nBags> <tw+1> <N>
-	sOutput += s ;
-
-	int extra_idx = one_based_indexing? 1 : 0 ;
-
-	// nBags X vars of the bag
 	for (int i = 0 ; i < bews.nBuckets() ; i++) {
 		BucketElimination::Bucket *b = bews.getBucket(i) ;
 		if (NULL == b) continue ;
 		if (b->Width() < 0) 
 			b->ComputeSignature() ;
+		}
+
+	char s[128] ;
+	int extra_idx = one_based_indexing? 1 : 0 ;
+
+/*
+// DEBUGGG
+	int idxv4 = bews.VarPos()[3] ;
+	BucketElimination::Bucket *b4 = bews.MapVar2Bucket(3) ;
+	if (idxv4 < 0 || idxv4 >= bews.N()) 
+		{ sprintf(s, "c ERORR v4 has no ordeer idx\n") ; sOutput += s ; }
+	if (NULL == b4) 
+		{ sprintf(s, "c ERORR v4 has no bucket\n") ; sOutput += s ; }
+	int idxBv4 = b4->IDX() ; { sprintf(s, "c INFO v4 bidx=%d (bV=%d) idxv4inOrder=%d\n", extra_idx + idxBv4, extra_idx + b4->V(), extra_idx + idxv4) ; sOutput += s ; }
+// DEBUGGG
+	BucketElimination::Bucket *b7070 = bews.getBucket(7070) ;
+	int vB7070 = b7070->V() ;
+		{ sprintf(s, "c INFO b7071 v=%d width=%d nC=%d P=%c\n", extra_idx + vB7070, b7070->Width(), b7070->nChildren(), NULL != b7070->ParentBucket() ? 'y': 'n') ; sOutput += s ; }
+// DEBUGGG
+	int c4 = 0 ;
+	for (int i = 0 ; i < bews.N() ; i++) {
+		if (3 == bews.VarOrder()[i]) c4++ ;
+		}
+		{ sprintf(s, "c INFO c4=%d\n", c4) ; sOutput += s ; }
+*/
+	// if there are connected components, we may need to connect them to dummy root
+	int32_t idxDummyRoot = -1 ;
+	if (ConnectedComponents && bews.Problem()->nConnectedComponents() > 1) 
+		idxDummyRoot = extra_idx + bews.nBuckets() ;
+
+	sprintf(s, "s td %d %d %d", (int) (bews.nBuckets() + (idxDummyRoot >= 0 ? 1 : 0)), bews.MaxNumVarsInBucket(), P.N()) ; // s td <nBags> <tw+1> <N>
+	sOutput += s ;
+
+	// nBags X vars of the bag
+	for (int i = 0 ; i < bews.nBuckets() ; i++) {
+		BucketElimination::Bucket *b = bews.getBucket(i) ;
+		if (NULL == b) continue ;
 		sprintf(s, "\nb %d", extra_idx + b->IDX()) ; sOutput += s ;
 		for (int j = 0 ; j < b->Width() ; j++) 
 			{ sprintf(s, " %d", extra_idx + b->Signature()[j]) ; sOutput += s ; }
+		}
+	// if there are connected components, we may need to connect them to dummy root
+	std::vector<int> roots ;
+	if (ConnectedComponents && idxDummyRoot >= 0) {
+		idxDummyRoot = extra_idx + bews.nBuckets() ;
+		sprintf(s, "\nb %d", idxDummyRoot) ; sOutput += s ;
+		roots.reserve(bews.Problem()->nConnectedComponents()) ;
+		for (int i = 0 ; i < bews.nBuckets() ; i++) {
+			BucketElimination::Bucket *b = bews.getBucket(i) ;
+			if (NULL == b) continue ;
+			if (NULL == b->ParentBucket()) 
+				roots.push_back(extra_idx + b->IDX()) ;
+			}
 		}
 
 	// edges of the bucket tree
@@ -1008,6 +1049,11 @@ int32_t ARE::VarElimOrderComp::Order::SerializeTreeDecomposition(ARE::ARP & P, b
 		if (NULL == p) continue ;
 		sprintf(s, "\n%d %d", extra_idx + b->IDX(), extra_idx + p->IDX()) ; sOutput += s ;
 		}
+	// extra edges to connect BT roots to dummy root
+	if (ConnectedComponents && idxDummyRoot >= 0) {
+		for (int i = 0 ; i < roots.size() ; i++) 
+			{ sprintf(s, "\n%d %d", idxDummyRoot, roots[i]) ; sOutput += s ; }
+		}
 
 	return 0 ;
 }
@@ -1017,13 +1063,21 @@ int32_t ARE::VarElimOrderComp::Order::SerializeTreeDecomposition(ARE::ARP & P, b
 
 static ARE::VarElimOrderComp::Order BestOrder ;
 static ARE::VarElimOrderComp::CVOcontext Context ;
+static int64_t tStart = 0 ;
+static int nThreads2Use = -1 ;
 
 static int SerializeBestOrderTD(void)
 {
 	ARE::utils::AutoLock lock(Context._BestOrderMutex) ;
+//	int64_t tNow = ARE::GetTimeInMilliseconds() ;
+//	cout << "c BEST ORDER so far : N=" << Context._Problem->N() << " width=" << BestOrder._Width << " lowerbound=" << BestOrder._WidthLowerBound << " varElimComplexity(log10)=" << BestOrder._Complexity_Log10 << " nRunsStarted=" <<  Context._nRunsStarted << " nRunsCompleted=" << Context._nRunsCompleted << " nImprovements=" << Context._nImprovements << " nTrivialVars=" << Context._MasterGraph._OrderLength << " runtime=" << (tNow - tStart) << "msec" << " nThreads=" << nThreads2Use << std::endl ;
 	std::string sTD ;
-	BestOrder.SerializeTreeDecomposition(*(Context._Problem), true, sTD) ;
-	cout << "\n\n" << sTD ;
+	BucketElimination::MBEworkspace bews ;
+	BestOrder.SerializeTreeDecomposition(*(Context._Problem), bews, true, true, sTD) ;
+//	cout << "c mbews stats : N=" << bews.N() << " nCC=" << bews.Problem()->nConnectedComponents() << " nB=" << bews.nBuckets() << " nVwoB=" << bews.nVarsWithoutBucket() << " maxDTheight=" << bews.MaxTreeHeight() << " nBwoC=" << bews.nBucketsWithNoChildren() << " nRoots=" << bews.nRoots() << std::endl ;
+	cout << sTD ;
+	cout << flush ;
+	return 0 ;
 }
 
 static int SerializeBestOrderW(void)
@@ -1122,13 +1176,13 @@ int main(int argc, char* argv[])
 	int64_t TimeLimitInMilliSeconds = 86400000 ;
 	int nRP = 8 ; double eRP = 0.5 ;
 	bool PerformSingletonConsistencyChecking = false, EliminateSingletonDomainVariables = file_is_uai ? true : false, earlyterminationofbasic_W = true, earlyterminationofbasic_C = false ;
-	int nThreads2Use = maxNumProcessorThreads > 1 ? maxNumProcessorThreads - 1 : 1 ;
+	nThreads2Use = maxNumProcessorThreads > 1 ? maxNumProcessorThreads - 1 : 1 ;
 #ifdef VERBOSE_CVO
 	printf("\nnThreads2Use=%d nrunstodo=%d TimeLimitInMilliSeconds=%lld", (int)nThreads2Use, (int)nrunstodo, (int64_t)TimeLimitInMilliSeconds);
 #endif
 	Context._BestOrder = &BestOrder ;
 	ARE::VarElimOrderComp::CVOcontext *context = &Context ;
-	int64_t tStart = ARE::GetTimeInMilliseconds();
+	tStart = ARE::GetTimeInMilliseconds();
 	int res = ARE::VarElimOrderComp::Compute(problem_filename,
 		ARE::VarElimOrderComp::Width, ARE::VarElimOrderComp::MinFill, 
 		nThreads2Use, nrunstodo, TimeLimitInMilliSeconds, nRP, eRP,
@@ -1150,9 +1204,10 @@ int main(int argc, char* argv[])
 #endif
 
 	// save best tree decomposition
-	std::string sTD ;
-	BestOrder.SerializeTreeDecomposition(*(Context._Problem), true, sTD) ;
-	cout << "\n\n" << sTD ;
+	SerializeBestOrderTD() ;
+//	std::string sTD ;
+//	BestOrder.SerializeTreeDecomposition(*(Context._Problem), true, sTD) ;
+//	cout << "\n\n" << sTD ;
 
 //	if (NULL != Context) 
 //		{ delete Context ; Context = NULL ; }

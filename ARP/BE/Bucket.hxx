@@ -22,6 +22,7 @@ protected :
 public :
 	inline MBEworkspace *Workspace(void) const { return _Workspace ; }
 	inline int32_t IDX(void) const { return _IDX ; }
+	inline int32_t V(void) const { return _V ; }
 	inline void SetIDX(int32_t IDX) { _IDX = IDX ; }
 
 	// width/signature of this bucket; this includes Original/Augmented functions, but not Intermediate functions.

@@ -141,6 +141,7 @@ BucketElimination::MBEworkspace::MBEworkspace(const char *BEEMDiskSpaceDirectory
 	_MaxBucketFunctionWidth(-1), 
 	_nBucketsWithSingleChild(-1), 
 	_nBucketsWithNoChildren(-1), 
+	_nRoots(-1), 
 	_TotalOriginalFunctionSize(-1), 
 	_TotalOriginalFunctionSpace(-1), 
 	_TotalNewFunctionSize_Log10(-1.0), 
@@ -650,6 +651,14 @@ int32_t BucketElimination::MBEworkspace::CreateBuckets(bool KeepBTsignature, boo
 		}
 	// compute num of functions/variables in each bucket; do this before bt functions are deleted.
 	ComputeMaxNumVarsInBucket() ;
+	// Compute num of roots
+	_nRoots = 0 ;
+	for (i = 0 ; i < _nBuckets ; i++) {
+		BucketElimination::Bucket *b = _Buckets[i] ;
+		if (NULL == b) continue ;
+		if (NULL == b->ParentBucket()) 
+			_nRoots++ ;
+		}
 	// delete bt functions
 	for (i = 0 ; i < _nBuckets ; i++) {
 		BucketElimination::Bucket *b = _Buckets[i] ;
@@ -1110,7 +1119,7 @@ int32_t BucketElimination::MBEworkspace::CheckBucketTreeIntegrity(void)
 		std::vector<MiniBucket *> & mbs = b->MiniBuckets() ;
 		if (nF <= 1 ? mbs.size() > 1 : false) 
 			goto failed ;
-		if (0 == nF && 0 != b->Width()) 
+		if (0 == nF && b->Width() > b->nVars() && b->nChildren() <= 0) 
 			goto failed ;
 		for (MiniBucket *mb : mbs) {
 //			if (mb.nVars() > b->Width()) 
@@ -1203,8 +1212,10 @@ int32_t BucketElimination::MBEworkspace::CheckBucketTreeIntegrity(void)
 
 	return 0 ;
 failed :
-	fprintf(ARE::fpLOG, "\nERROR : bucket tree integrity check") ;
-	::fflush(ARE::fpLOG) ;
+	if (NULL != ARE::fpLOG) {
+		fprintf(ARE::fpLOG, "\nERROR : bucket tree integrity check") ;
+		::fflush(ARE::fpLOG) ;
+		}
 	return 1 ;
 }
 

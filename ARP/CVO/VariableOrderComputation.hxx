@@ -7,9 +7,11 @@
 
 #include "Graph.hxx"
 
+namespace BucketElimination { class MBEworkspace ; }
+
 namespace ARE
 {
-
+	
 namespace VarElimOrderComp
 {
 
@@ -94,7 +96,7 @@ public :
 			}
 		return 0 ;
 	}
-	int32_t SerializeTreeDecomposition(ARE::ARP & P, bool one_based_indexing, std::string & sOutput) ;
+	int32_t SerializeTreeDecomposition(ARE::ARP & P, BucketElimination::MBEworkspace & bews, bool one_based_indexing, bool ConnectedComponents, std::string & sOutput) ;
 public :
 	Order(void)
 		: 

@@ -240,6 +240,7 @@ public :
 protected :
 	int32_t _nConnectedComponents ;
 public :
+	inline int32_t nConnectedComponents(void) const { return _nConnectedComponents ; }
 	int32_t ComputeConnectedComponents(void) ; // when computing this, we assume _AdjVars[] is computed.
 
 	// ***************************************************************************************************

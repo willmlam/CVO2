@@ -226,7 +226,7 @@ int32_t BucketElimination::Bucket::SetOriginalFunctions(int32_t N, ARE::Function
 		delete [] _OriginalSignature ;
 		_OriginalSignature = NULL ;
 		}
-	_OriginalWidth = 0 ;
+	_OriginalWidth = -1 ;
 	_nOriginalFunctions = 0 ;
 	return AddOriginalFunctions(N, FNs) ;
 }
@@ -386,8 +386,18 @@ int32_t BucketElimination::Bucket::ComputeSignature(void)
 			delete [] _OriginalSignature ;
 			_OriginalSignature = NULL ;
 			}
-		if (0 != ARE::ComputeSignature(_nOriginalFunctions, _OriginalFunctions, _OriginalWidth, _OriginalSignature)) 
-			return 1 ;
+		if (_nOriginalFunctions > 0) {
+			if (0 != ARE::ComputeSignature(_nOriginalFunctions, _OriginalFunctions, _OriginalWidth, _OriginalSignature)) 
+				return 1 ;
+			}
+		else if (_nVars > 0) {
+			_OriginalSignature = new int32_t[_nVars] ;
+			if (NULL == _OriginalSignature) 
+				return 1 ;
+			for (int32_t i = 0 ; i < _nVars ; i++) 
+				_OriginalSignature[i] = _Vars[i] ;
+			_OriginalWidth = _nVars ;
+			}
 		if (_OriginalWidth < 0) 
 			return 1 ;
 		}
@@ -395,20 +405,31 @@ int32_t BucketElimination::Bucket::ComputeSignature(void)
 	if (_OriginalWidth <= 0 && _nAugmentedFunctions <= 0) 
 		{ _Width = 0 ; return 0 ; }
 
-	std::vector<ARE::Function *> FNs ; 
-	FNs.reserve(_nOriginalFunctions + _nAugmentedFunctions) ;
-	if (FNs.capacity() != _nOriginalFunctions + _nAugmentedFunctions) 
-		return 1 ;
-	for (int32_t i = 0 ; i < _nOriginalFunctions ; i++) 
-		FNs.push_back(_OriginalFunctions[i]) ;
-	for (int32_t i = 0 ; i < _nAugmentedFunctions ; i++) 
-		FNs.push_back(_AugmentedFunctions[i]) ;
+	int nF = _nOriginalFunctions + _nAugmentedFunctions ;
+	if (nF > 0) {
+		std::vector<ARE::Function *> FNs ; 
+		FNs.reserve(nF) ;
+		if (FNs.capacity() != nF) 
+			return 1 ;
+		for (int32_t i = 0 ; i < _nOriginalFunctions ; i++) 
+			FNs.push_back(_OriginalFunctions[i]) ;
+		for (int32_t i = 0 ; i < _nAugmentedFunctions ; i++) 
+			FNs.push_back(_AugmentedFunctions[i]) ;
 
-	if (NULL != _Signature) { delete [] _Signature ; _Signature = NULL ; }
-	_Width = -1 ;
+		if (NULL != _Signature) { delete [] _Signature ; _Signature = NULL ; }
+		_Width = -1 ;
 
-	if (0 != ARE::ComputeSignature(FNs.size(), FNs.data(), _Width, _Signature)) 
-		return 1 ;
+		if (0 != ARE::ComputeSignature(FNs.size(), FNs.data(), _Width, _Signature)) 
+			return 1 ;
+		}
+	else if (_nVars > 0) {
+		_Signature = new int32_t[_nVars] ;
+		if (NULL == _Signature) 
+			return 1 ;
+		for (int32_t i = 0 ; i < _nVars ; i++) 
+			_Signature[i] = _Vars[i] ;
+		_Width = _nVars ;
+		}
 
 	return 0 ;
 }

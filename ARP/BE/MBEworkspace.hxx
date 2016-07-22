@@ -221,6 +221,7 @@ protected :
 	int32_t _MaxBucketFunctionWidth ; // maximum size of any bucket output function
 	int32_t _nBucketsWithSingleChild ; // number of buckets with single child
 	int32_t _nBucketsWithNoChildren ; // number of leaf buckets
+	int32_t _nRoots ; // number of roots in the bucket tree
 	int64_t _TotalOriginalFunctionSize ; // size of original functions in existance during any point during BE execution
 	int64_t _TotalOriginalFunctionSpace ; // space of original functions in existance during any point during BE execution
 	double _TotalNewFunctionSize_Log10 ; // return number of entries over all tables generated during BE execution
@@ -258,6 +259,7 @@ public :
 	inline int32_t MaxBucketFunctionWidth(void) const { return _MaxBucketFunctionWidth ; }
 	inline int32_t nBucketsWithSingleChild(void) const { return _nBucketsWithSingleChild ; }
 	inline int32_t nBucketsWithNoChildren(void) const { return _nBucketsWithNoChildren ; }
+	inline int32_t nRoots(void) const { return _nRoots ; }
 	inline int64_t TotalOriginalFunctionSize(void) const { return _TotalOriginalFunctionSize ; }
 	inline int64_t TotalOriginalFunctionSpace(void) const { return _TotalOriginalFunctionSpace ; }
 	inline double TotalNewFunctionSize_Log10(void) const { return _TotalNewFunctionSize_Log10 ; }
