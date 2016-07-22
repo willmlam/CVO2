@@ -26,6 +26,7 @@
 #include <pthread.h>
 pthread_mutex_t nRunsSumMutex = PTHREAD_MUTEX_INITIALIZER ;
 pthread_mutex_t stopSignalMutex = PTHREAD_MUTEX_INITIALIZER ;
+pthread_mutex_t printTDMutex = PTHREAD_MUTEX_INITIALIZER ;
 #endif
 
 static void GetCurrentDTsec(char *strDT, time_t & ttNow)
@@ -179,8 +180,12 @@ static void *WorkerThreadFn(void *X)
 //			fprintf(CVOcontext._fpLOG, "\nworker %d finished res=%d; width=%d complexity=%I64d", (int) w->_IDX, (int) res, (int) w->_G->_VarElimOrderWidth, (int64_t) w->_G->_TotalVarElimComplexity) ;
 //			fflush(CVOcontext._fpLOG) ;
 //			}
+		if (w->_ThreadStop) 
+			goto done ; // if stop requested, abandon
 		try {
 			ARE::utils::AutoLock lock(CVOcontext._BestOrderMutex) ;
+			if (w->_ThreadStop) 
+				goto done ; // if stop requested, abandon
 //GetCurrentDTmsec(strDT, tNow) ;
 //printf("\n%s worker %2d found width=%d complexity=%I64d space(#elements)=%I64d res=%d", strDT, (int) w->_IDX, (int) w->_G->_VarElimOrderWidth, (int64_t) w->_G->_TotalVarElimComplexity, (int64_t) w->_G->_TotalNewFunctionStorageAsNumOfElements, (int) res) ;
 			if (0 == res) {
@@ -215,6 +220,8 @@ static void *WorkerThreadFn(void *X)
 				}
 			}
 
+		if (w->_ThreadStop) 
+			goto done ; // if stop requested, abandon
 		try {
 			*(w->_G) = CVOcontext._MasterGraph ;
 			}
@@ -389,9 +396,9 @@ static void *CVOThreadFn(void *X)
 #if defined WINDOWS || _WINDOWS
 	stop_signalled = InterlockedCompareExchange(&(context->_StopAndExit), 1, 1) ;
 #else
-  pthread_mutex_lock(&stopSignalMutex);
-  stop_signalled = context->_StopAndExit;
-  pthread_mutex_unlock(&stopSignalMutex);
+	pthread_mutex_lock(&stopSignalMutex);
+	stop_signalled = context->_StopAndExit;
+	pthread_mutex_unlock(&stopSignalMutex);
 #endif
 	if (0 != stop_signalled) {
 		if (NULL != context->_fpLOG) {
@@ -610,7 +617,7 @@ int ARE::VarElimOrderComp::CVOcontext::RequestStopCVOthread(void)
 #else
 	long previous_value = 0 ;
 	pthread_mutex_lock(&stopSignalMutex) ;
-	if (_StopAndExit == 0) {
+	if (0 == _StopAndExit) {
 		_StopAndExit = 1 ;
 		}
 	else 
@@ -1065,18 +1072,37 @@ static ARE::VarElimOrderComp::Order BestOrder ;
 static ARE::VarElimOrderComp::CVOcontext Context ;
 static int64_t tStart = 0 ;
 static int nThreads2Use = -1 ;
+static long nTDprintsAttempted = 0 ;
+static long nTDprintsDone = 0 ;
 
 static int SerializeBestOrderTD(void)
 {
-	ARE::utils::AutoLock lock(Context._BestOrderMutex) ;
-//	int64_t tNow = ARE::GetTimeInMilliseconds() ;
-//	cout << "c BEST ORDER so far : N=" << Context._Problem->N() << " width=" << BestOrder._Width << " lowerbound=" << BestOrder._WidthLowerBound << " varElimComplexity(log10)=" << BestOrder._Complexity_Log10 << " nRunsStarted=" <<  Context._nRunsStarted << " nRunsCompleted=" << Context._nRunsCompleted << " nImprovements=" << Context._nImprovements << " nTrivialVars=" << Context._MasterGraph._OrderLength << " runtime=" << (tNow - tStart) << "msec" << " nThreads=" << nThreads2Use << std::endl ;
-	std::string sTD ;
-	BucketElimination::MBEworkspace bews ;
-	BestOrder.SerializeTreeDecomposition(*(Context._Problem), bews, true, true, sTD) ;
-//	cout << "c mbews stats : N=" << bews.N() << " nCC=" << bews.Problem()->nConnectedComponents() << " nB=" << bews.nBuckets() << " nVwoB=" << bews.nVarsWithoutBucket() << " maxDTheight=" << bews.MaxTreeHeight() << " nBwoC=" << bews.nBucketsWithNoChildren() << " nRoots=" << bews.nRoots() << std::endl ;
-	cout << sTD ;
-	cout << flush ;
+	// count how many times it has been printed
+	long v = -1 ;
+	{
+#if defined WINDOWS || _WINDOWS
+		v = InterlockedIncrement(&nTDprintsAttempted) ;
+#else
+		pthread_mutex_lock(&printTDMutex) ;
+		v = ++nTDprintsAttempted ;
+		pthread_mutex_unlock(&printTDMutex) ;
+#endif
+	}
+
+	// just one print
+	if (v <= 1) {
+		ARE::utils::AutoLock lock(Context._BestOrderMutex) ;
+//		int64_t tNow = ARE::GetTimeInMilliseconds() ;
+//		cout << "c BEST ORDER so far : N=" << Context._Problem->N() << " width=" << BestOrder._Width << " lowerbound=" << BestOrder._WidthLowerBound << " varElimComplexity(log10)=" << BestOrder._Complexity_Log10 << " nRunsStarted=" <<  Context._nRunsStarted << " nRunsCompleted=" << Context._nRunsCompleted << " nImprovements=" << Context._nImprovements << " nTrivialVars=" << Context._MasterGraph._OrderLength << " runtime=" << (tNow - tStart) << "msec" << " nThreads=" << nThreads2Use << std::endl ;
+		std::string sTD ;
+		BucketElimination::MBEworkspace bews ;
+		BestOrder.SerializeTreeDecomposition(*(Context._Problem), bews, true, true, sTD) ;
+//		cout << "c mbews stats : N=" << bews.N() << " nCC=" << bews.Problem()->nConnectedComponents() << " nB=" << bews.nBuckets() << " nVwoB=" << bews.nVarsWithoutBucket() << " maxDTheight=" << bews.MaxTreeHeight() << " nBwoC=" << bews.nBucketsWithNoChildren() << " nRoots=" << bews.nRoots() << std::endl ;
+		cout << sTD ;
+		cout << flush ;
+		++nTDprintsDone ;
+		}
+
 	return 0 ;
 }
 
@@ -1096,8 +1122,14 @@ static void handle_signal(int signal)
         case SIGUSR1:
             SerializeBestOrderW() ;
             break;
+        case SIGINT:
         case SIGTERM:
+			Context.RequestStopCVOthread() ;
             SerializeBestOrderTD() ;
+			// wait until print is finished before quitting
+			while (nTDprintsDone <= 0) {
+				SLEEP(1) ;
+				}
             exit(0);
         default:
             return;
@@ -1166,7 +1198,7 @@ int main(int argc, char* argv[])
 	struct sigaction sa ;
 	sa.sa_handler = handle_signal ;
 //	sigemptyset(&sa.sa_mask) ;
-	sigfillset(&sa.sa_mask) ;
+	sigfillset(&sa.sa_mask) ; // block every signal during handling
 //	sa.sa_flags = 0 ;
 	sa.sa_flags = SA_RESTART ; // Restart functions if interrupted by handler
 	sigaction(SIGTERM, &sa, NULL) ;
