@@ -1143,7 +1143,7 @@ int main(int argc, char* argv[])
 
 	unsigned long randomGeneratorSeed = 0 ;
 	std::string problem_filename ;
-	int nrunstodo = 10000000 ;
+	int nrunstodo = 1000000000 ;
 	int nArgs = (nParams-1)>>1 ;
 	bool findPracticalVariableOrder = true ;
 	if (1 + 2*nArgs != nParams) {
@@ -1243,6 +1243,11 @@ int main(int argc, char* argv[])
 
 //	if (NULL != Context) 
 //		{ delete Context ; Context = NULL ; }
+
+	// wait this printout is done; SIGTERM may have caused it too.
+	while (nTDprintsDone <= 0) {
+		SLEEP(1) ;
+		}
 
 	return 0 ;
 }
