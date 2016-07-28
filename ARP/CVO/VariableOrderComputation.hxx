@@ -17,8 +17,10 @@ namespace VarElimOrderComp
 
 enum ObjectiveToMinimize
 {
+	None,
 	Width, 
-	StateSpaceSize
+	StateSpaceSize, 
+	BTheight
 } ;
 
 enum NextVarPickCriteria
@@ -97,6 +99,18 @@ public :
 		return 0 ;
 	}
 	int32_t SerializeTreeDecomposition(ARE::ARP & P, BucketElimination::MBEworkspace & bews, bool one_based_indexing, bool ConnectedComponents, std::string & sOutput) ;
+	void Destroy(void)
+	{
+		_nVars = 0 ;
+		_Width  = -1 ;
+		_WidthLowerBound = -1 ;
+		_Complexity_Log10 = -1.0 ;
+		_TotalNewFunctionStorageAsNumOfElements_Log10 = -1.0 ;
+		_MaxSingleVarElimComplexity = DBL_MAX ;
+		_nFillEdges = 0 ;
+		if (NULL != _VarListInElimOrder) 
+			{ delete [] _VarListInElimOrder ; _VarListInElimOrder = NULL ; }
+	}
 public :
 	Order(void)
 		: 
@@ -125,6 +139,7 @@ public :
 	// OPTIONS
 	ARE::VarElimOrderComp::ObjectiveToMinimize _ObjCode ;
 	ARE::VarElimOrderComp::NextVarPickCriteria _AlgCode ;
+	ARE::VarElimOrderComp::ObjectiveToMinimize _SecondaryObjCode ;
 	int _nThreads ;
 	int _nRunsToDoMin, _nRunsToDoMax ;
 	int64_t _TimeLimitInMilliSeconds ;
@@ -190,6 +205,8 @@ public :
 			delete [] _TempAdjVarSpaceSizeExtraArray[i] ;
 			}
 		_TempAdjVarSpaceSizeExtraArrayN = 0 ;
+		if (NULL != _BestOrder) 
+			_BestOrder->Destroy() ;
 		Reset() ;
 		_Problem = NULL ;
 		return 0 ;
@@ -200,6 +217,7 @@ public :
 		_Problem(NULL), 
 		_ObjCode(ARE::VarElimOrderComp::Width), 
 		_AlgCode(ARE::VarElimOrderComp::MinFill), 
+		_SecondaryObjCode(ARE::VarElimOrderComp::None), 
 		_nThreads(1), 
 		_nRunsToDoMin(1), 
 		_nRunsToDoMax(1), 
@@ -284,8 +302,9 @@ public :
 int Compute(
 	// IN
 	const std::string & ProblemInputFile, 
-	ARE::VarElimOrderComp::ObjectiveToMinimize objCode, // 0=width, 1=space size (complexity)
-	ARE::VarElimOrderComp::NextVarPickCriteria algCode, // 0=MinFill, 1=MinDegree, 2=MinComplexity
+	ARE::VarElimOrderComp::ObjectiveToMinimize objCode,
+	ARE::VarElimOrderComp::NextVarPickCriteria algCode,
+	ARE::VarElimOrderComp::ObjectiveToMinimize objCodeSecondary,
 	int nThreads, 
 	int nRunsToDo, 
 	int64_t TimeLimitInMilliSeconds, 

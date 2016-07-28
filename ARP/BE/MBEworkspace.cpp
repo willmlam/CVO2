@@ -473,8 +473,6 @@ int32_t BucketElimination::MBEworkspace::CreateBuckets(bool KeepBTsignature, boo
 	// ***************************************************************************************************
 
 	int32_t NF = _Problem->nFunctions() ;
-	if (0 == NF) 
-		return 0 ;
 // DEBUGGGG
 /*if (NULL != ARE::fpLOG) {
 	INT64 tNOW = ARE::GetTimeInMilliseconds() ;
@@ -502,10 +500,13 @@ int32_t BucketElimination::MBEworkspace::CreateBuckets(bool KeepBTsignature, boo
 			}
 		}
 
-	ARE::Function **fl = new ARE::Function*[2*NF] ;
-	if (NULL == fl) {
-		Destroy() ;
-		return 1 ;
+	ARE::Function **fl = NULL ;
+	if (NF > 0) {
+		fl = new ARE::Function*[2*NF] ;
+		if (NULL == fl) {
+			Destroy() ;
+			return 1 ;
+			}
 		}
 	// for debugging purposes, we want to check which functions get assigned to a bucket
 	ARE::Function **fl_assigned = fl + NF ;
@@ -652,13 +653,7 @@ int32_t BucketElimination::MBEworkspace::CreateBuckets(bool KeepBTsignature, boo
 	// compute num of functions/variables in each bucket; do this before bt functions are deleted.
 	ComputeMaxNumVarsInBucket() ;
 	// Compute num of roots
-	_nRoots = 0 ;
-	for (i = 0 ; i < _nBuckets ; i++) {
-		BucketElimination::Bucket *b = _Buckets[i] ;
-		if (NULL == b) continue ;
-		if (NULL == b->ParentBucket()) 
-			_nRoots++ ;
-		}
+	ComputeNumRoots() ;
 	// delete bt functions
 	for (i = 0 ; i < _nBuckets ; i++) {
 		BucketElimination::Bucket *b = _Buckets[i] ;

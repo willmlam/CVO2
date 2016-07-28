@@ -453,8 +453,9 @@ int32_t BucketElimination::Bucket::ComputeOutputFunctionWithScopeWithoutTable(in
 			return 1 ;
 			}
 		}
-	if (_Width <= 0 ? true : _Width - _nVars <= 0) 
-		return 0 ;
+	if (_Width <= 0) 
+		return 0 ; // bucket has no variables; that should not happen
+	// if _Width - _nVars <= 0, then all variables are eliminated; output is a const fn.
 
 	bool createdFN = false ;
 	if (NULL == FN) {

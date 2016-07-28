@@ -279,6 +279,19 @@ public :
 	// this fn can be run any time, whether MB partitioning is done or not
 	int32_t ComputeMaxNumVarsInBucket(void) ;
 
+	// Compute num of roots
+	int32_t ComputeNumRoots(void)
+	{
+		_nRoots = 0 ;
+		for (int i = 0 ; i < _nBuckets ; i++) {
+			BucketElimination::Bucket *b = _Buckets[i] ;
+			if (NULL == b) continue ;
+			if (NULL == b->ParentBucket()) 
+				_nRoots++ ;
+			}
+		return 0 ;
+	}
+
 	// these functions can be executed once bucket tree structure is set up; no MB partitioning is required.
 	// these values are wrt original (full) bucket tree.
 	int32_t ComputeMaxNumChildren(void) ;

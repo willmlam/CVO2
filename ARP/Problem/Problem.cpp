@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <sstream>
+#include <fstream>
 
 // Added by Vibhav for domain pruning implementation
 #include "Solver.h"
@@ -405,7 +406,7 @@ int32_t ARE::ARP::LoadFromFile(const std::string & FileName)
 {
 	int32_t res = -1 ;
 
-	// uaiFN may have dir in it; extract filename.
+	// fn may have dir in it; extract filename.
 	int32_t i = FileName.length() - 1 ;
 	for (; i >= 0 ; i--) {
 #ifdef LINUX
@@ -426,72 +427,80 @@ int32_t ARE::ARP::LoadFromFile(const std::string & FileName)
 
 	if (NULL != ARE::fpLOG) 
 		fprintf(ARE::fpLOG, "\nWill load problem from %s", FileName.c_str()) ;
-	if ("cin" == fn_pure) {
-		if ("gr" == fn_ext) {
-
-			Destroy();
-
-			std::string s, s1, s2; int32_t nV = -1, nE = -1, nEdgesRead = 0;
-			bool have_1stline = false;
-			while (true) {
-				getline(std::cin, s);
-				if (s.length() <= 0) continue;
-				if ('c' == s[0] || 'C' == s[0]) continue;
-				std::istringstream line_stream(s);
-				if (!have_1stline) {
-					line_stream >> s1; line_stream >> s2; line_stream >> nV; line_stream >> nE;
-					if (0 == s1.length() || 0 == s2.length()) { res = 1 ; goto done ; }
-					if ('p' != s1[0] || "tw" != s2) { res = 1; goto done; }
-					have_1stline = true; break;
-					}
-				if (++nEdgesRead >= nE)
-					break;
-				}
-
-			SetN(nV) ;
-			SetK(1) ;
-
-			_nFunctions = nE;
-			if (_nFunctions < 1)
-				{ _nFunctions = 0; res = 0; goto done; }
-			_Functions = new ARE::Function*[_nFunctions];
-			if (NULL == _Functions)
-				{ res = 1 ; goto done ; }
-			for (i = 0; i < _nFunctions; i++)
-				_Functions[i] = NULL;
-
-			// read in function signatures
-			int32_t A[2] ;
-			while (true) {
-				getline(std::cin, s);
-				if (s.length() <= 0) continue;
-				if ('c' == s[0] || 'C' == s[0]) continue;
-				std::istringstream line_stream(s);
-				int32_t v1, v2 ; line_stream >> v1 ; line_stream >> v2 ;
-				_Functions[nEdgesRead] = new ARE::Function(NULL, this, nEdgesRead);
-				if (NULL == _Functions[nEdgesRead])
-					{ res = 1; goto done; }
-				ARE::Function *f = _Functions[nEdgesRead];
-				f->SetType(ARE_Function_Type_Const);
-				A[0] = v1-1 ; A[1] = v2-1 ; // var indeces in input range [1,n]
-				if (A[0] < 0 || A[0] >= _nVars || A[1] < 0 || A[1] >= _nVars)
-					{ res = 1; goto done; }
-				if (0 != f->SetArguments(2, A, -1))
-					goto done;
-				// sort scope, so that we can sort the function list easily
-				int32_t *sorted_scope = f->SortedArgumentsList(true);
-				if (NULL == sorted_scope)
-					{ res = 1; goto done; }
-				int64_t ts = f->ComputeTableSize();
-				f->ConstValue() = 0.0 ;
-				if (++nEdgesRead >= nE)
-					break;
-				}
-
-			DeleteDuplicateFunctions() ;
-
-			res = 0 ; goto done ;
+	if ("gr" == fn_ext) {
+		std::istream *input = NULL ;
+		bool delete_istream = false ;
+		if ("cin" == fn_pure) {
+			input = &(std::cin) ;
 			}
+		else {
+			input = new ifstream(FileName.c_str()) ;
+			}
+
+		Destroy();
+
+		std::string s, s1, s2; int32_t nV = -1, nE = -1, nEdgesRead = 0;
+		bool have_1stline = false;
+		while (true) {
+			getline(*input, s);
+			if (s.length() <= 0) continue;
+			if ('c' == s[0] || 'C' == s[0]) continue;
+			std::istringstream line_stream(s);
+			if (!have_1stline) {
+				line_stream >> s1; line_stream >> s2; line_stream >> nV; line_stream >> nE;
+				if (0 == s1.length() || 0 == s2.length()) { res = 1 ; goto done ; }
+				if ('p' != s1[0] || "tw" != s2) { res = 1; goto done; }
+				have_1stline = true; break;
+				}
+			if (++nEdgesRead >= nE)
+				break;
+			}
+
+		SetN(nV) ;
+		SetK(1) ;
+
+		_nFunctions = nE;
+		if (_nFunctions < 1)
+			{ _nFunctions = 0; res = 0; goto done; }
+		_Functions = new ARE::Function*[_nFunctions];
+		if (NULL == _Functions)
+			{ res = 1 ; goto done ; }
+		for (i = 0; i < _nFunctions; i++)
+			_Functions[i] = NULL;
+
+		// read in function signatures
+		int32_t A[2] ;
+		while (true) {
+			getline(*input, s);
+			if (s.length() <= 0) continue;
+			if ('c' == s[0] || 'C' == s[0]) continue;
+			std::istringstream line_stream(s);
+			int32_t v1, v2 ; line_stream >> v1 ; line_stream >> v2 ;
+			_Functions[nEdgesRead] = new ARE::Function(NULL, this, nEdgesRead);
+			if (NULL == _Functions[nEdgesRead])
+				{ res = 1; goto done; }
+			ARE::Function *f = _Functions[nEdgesRead];
+			f->SetType(ARE_Function_Type_Const);
+			A[0] = v1-1 ; A[1] = v2-1 ; // var indeces in input range [1,n]
+			if (A[0] < 0 || A[0] >= _nVars || A[1] < 0 || A[1] >= _nVars)
+				{ res = 1; goto done; }
+			if (0 != f->SetArguments(2, A, -1))
+				goto done;
+			// sort scope, so that we can sort the function list easily
+			int32_t *sorted_scope = f->SortedArgumentsList(true);
+			if (NULL == sorted_scope)
+				{ res = 1; goto done; }
+			int64_t ts = f->ComputeTableSize();
+			f->ConstValue() = 0.0 ;
+			if (++nEdgesRead >= nE)
+				break;
+			}
+
+		DeleteDuplicateFunctions() ;
+
+		if (delete_istream) 
+			{ delete input ; input = NULL ; }
+		res = 0 ; goto done ;
 		}
 	else {
 		FILE *fp = fopen(FileName.c_str(), "rb") ;

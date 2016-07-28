@@ -20,6 +20,7 @@
 #include "BE/MBEworkspace.hxx"
 
 //#define VERBOSE_CVO
+//#define RUN_FOLDER_PROBLEMS
 
 #ifdef LINUX
 #include <signal.h>
@@ -27,6 +28,21 @@
 pthread_mutex_t nRunsSumMutex = PTHREAD_MUTEX_INITIALIZER ;
 pthread_mutex_t stopSignalMutex = PTHREAD_MUTEX_INITIALIZER ;
 pthread_mutex_t printTDMutex = PTHREAD_MUTEX_INITIALIZER ;
+#endif
+
+#ifdef WINDOWS
+std::string wstringToString(const std::wstring& wString)
+{
+	unsigned int size = WideCharToMultiByte(CP_UTF8, 0, wString.c_str(), wString.length(), NULL, 0, NULL, NULL) ;
+	if (0 == size)
+		return ""; // error
+	char* utf8 = new char[size + 1];
+	::WideCharToMultiByte(CP_UTF8, 0, wString.c_str(), wString.length(), utf8, size+1, NULL, NULL) ;
+	utf8[size] = '\0';
+	std::string result(utf8, size);
+	delete[] utf8;
+	return result ;
+}
 #endif
 
 static void GetCurrentDTsec(char *strDT, time_t & ttNow)
@@ -48,6 +64,10 @@ static void GetCurrentDTmsec(char *strDT, int64_t  & tNow)
 
 int ARE::VarElimOrderComp::CVOcontext::NoteVarOrderComputationCompletion(int w_IDX, ARE::Graph & G)
 {
+	if (G._OrderLength != _Problem->N()) {
+		int error = 1 ;
+		return 1 ;
+		}
 	++_nRunsCompleted ;
 	if ((StateSpaceSize==_ObjCode && (G._TotalVarElimComplexity_Log10 < _BestOrder->_Complexity_Log10 || (fabs(G._TotalVarElimComplexity_Log10 - _BestOrder->_Complexity_Log10) < 0.01 && G._VarElimOrderWidth < _BestOrder->_Width))) ||  
 		(Width==_ObjCode && (G._VarElimOrderWidth < _BestOrder->_Width || (G._VarElimOrderWidth == _BestOrder->_Width && G._TotalVarElimComplexity_Log10 < _BestOrder->_Complexity_Log10)))) {
@@ -321,6 +341,12 @@ static void *CVOThreadFn(void *X)
 //		i = MasterGraph.ComputeVariableEliminationOrder_Simple_wMinFillOnly(INT_MAX, false, false, 1, 1, 0.0, context->_TempAdjVarSpace, TempAdjVarSpaceSize) ;
 //	else 
 		i = MasterGraph.ComputeVariableEliminationOrder_Simple(0, INT_MAX, false, DBL_MAX, false, true, 1, 1, 0.0, context->_TempAdjVarSpaceSizeExtraArrayN, context->_TempAdjVarSpaceSizeExtraArray) ;
+	// check if the problem was solved completely
+	if (MasterGraph._OrderLength >= MasterGraph._nNodes) {
+		context->NoteVarOrderComputationCompletion(-1, MasterGraph) ;
+		ret = 0 ;
+		goto done ;
+		}
 // DEBUGGG_AAA
 //ARE::VarElimOrderComp::DeleteNewAdjVarList(context->_TempAdjVarSpaceSizeExtraArrayN, context->_TempAdjVarSpaceSizeExtraArray) ;
 	MasterGraph.ReAllocateEdges() ;
@@ -690,6 +716,7 @@ int ARE::VarElimOrderComp::Compute(
 	const std::string & ProblemInputFile, 
 	ARE::VarElimOrderComp::ObjectiveToMinimize objcode,
 	ARE::VarElimOrderComp::NextVarPickCriteria algcode,
+	ARE::VarElimOrderComp::ObjectiveToMinimize objCodeSecondary,
 	int nthreads, 
 	int nrunstodo, 
 	int64_t TimeLimitInMilliSeconds, 
@@ -746,6 +773,7 @@ int ARE::VarElimOrderComp::Compute(
 	ARE::ARP *p = cvocontext->_Problem ;
 	cvocontext->_AlgCode = algcode ;
 	cvocontext->_ObjCode = objcode ;
+	cvocontext->_SecondaryObjCode = objCodeSecondary ;
 	cvocontext->_RandomGeneratorSeed = random_seed ;
 
 	cvocontext->_nRunsToDoMax = nrunstodo ;
@@ -782,7 +810,7 @@ int ARE::VarElimOrderComp::Compute(
 	if (cvocontext->_nRunsToDoMin < 1 && cvocontext->_TimeLimitInMilliSeconds < 1) 
 		cvocontext->_nRunsToDoMin = 1 ;
 
-	// uaiFN may have dir in it; extract filename.
+	// fn may have dir in it; extract filename.
 	i = ProblemInputFile.length() - 1 ;
 	for (; i >= 0 ; i--) {
 #ifdef LINUX
@@ -799,17 +827,23 @@ int ARE::VarElimOrderComp::Compute(
 
 	if (0 != p->LoadFromFile(ProblemInputFile)) {
 		ret = 2 ;
+#ifdef VERBOSE_CVO
 		printf("\nload failed ...") ;
+#endif
 		goto done ;
 		}
 	if (0 != p->PerformPostConstructionAnalysis()) {
 		ret = 3 ;
+#ifdef VERBOSE_CVO
 		printf("\nPerformPostConstructionAnalysis failed ...") ;
+#endif
 		goto done ;
 		}
 	if (p->N() < 1) {
 		ret = 4 ;
+#ifdef VERBOSE_CVO
 		printf("\nN=%d; will exit ...", p->N()) ;
+#endif
 		goto done ;
 		}
 /*
@@ -910,7 +944,9 @@ int ARE::VarElimOrderComp::Compute(
 
 	cvocontext->CreateCVOthread() ;
 	if (0 == cvocontext->_ThreadHandle) {
+#ifdef VERBOSE_CVO
 		printf("\nFAILED to create cvo thread ...") ;
+#endif
 		if (NULL != cvocontext->_fpLOG) {
 			fprintf(cvocontext->_fpLOG, "\nFAILED to create cvo thread ...") ;
 			fflush(cvocontext->_fpLOG) ;
@@ -975,8 +1011,14 @@ done :
 
 int32_t ARE::VarElimOrderComp::Order::SerializeTreeDecomposition(ARE::ARP & P, BucketElimination::MBEworkspace & bews, bool one_based_indexing, bool ConnectedComponents, std::string & sOutput)
 {
-	if (_Width < 0 || _Width >= INT_MAX) {
+	char s[128] ;
+	if (P.N() <= 0) {
 		sOutput = "s td 0 0 0" ;
+		return 0 ;
+		}
+	if (_Width < 0 || _Width >= INT_MAX) {
+		sprintf(s, "s td 0 0 %d", (int) P.N()) ; // s td <nBags> <tw+1> <N>
+		sOutput = s ;
 		return 0 ;
 		}
 
@@ -994,8 +1036,9 @@ int32_t ARE::VarElimOrderComp::Order::SerializeTreeDecomposition(ARE::ARP & P, B
 		if (b->Width() < 0) 
 			b->ComputeSignature() ;
 		}
+	if (bews.MaxNumVarsInBucket() < 0) 
+		bews.ComputeMaxNumVarsInBucket() ;
 
-	char s[128] ;
 	int extra_idx = one_based_indexing? 1 : 0 ;
 
 /*
@@ -1023,7 +1066,7 @@ int32_t ARE::VarElimOrderComp::Order::SerializeTreeDecomposition(ARE::ARP & P, B
 	if (ConnectedComponents && bews.Problem()->nConnectedComponents() > 1) 
 		idxDummyRoot = extra_idx + bews.nBuckets() ;
 
-	sprintf(s, "s td %d %d %d", (int) (bews.nBuckets() + (idxDummyRoot >= 0 ? 1 : 0)), bews.MaxNumVarsInBucket(), P.N()) ; // s td <nBags> <tw+1> <N>
+	sprintf(s, "s td %d %d %d", (int) (bews.nBuckets() + (idxDummyRoot >= 0 ? 1 : 0)), bews.MaxNumVarsInBucket(), (int) P.N()) ; // s td <nBags> <tw+1> <N>
 	sOutput += s ;
 
 	// nBags X vars of the bag
@@ -1075,7 +1118,7 @@ static int nThreads2Use = -1 ;
 static long nTDprintsAttempted = 0 ;
 static long nTDprintsDone = 0 ;
 
-static int SerializeBestOrderTD(void)
+static int SerializeBestOrderTD(std::string *fn)
 {
 	// count how many times it has been printed
 	long v = -1 ;
@@ -1091,15 +1134,24 @@ static int SerializeBestOrderTD(void)
 
 	// just one print
 	if (v <= 1) {
+		FILE *fp = NULL != fn ? fopen(fn->c_str(), "w") : NULL ;
 		ARE::utils::AutoLock lock(Context._BestOrderMutex) ;
 //		int64_t tNow = ARE::GetTimeInMilliseconds() ;
 //		cout << "c BEST ORDER so far : N=" << Context._Problem->N() << " width=" << BestOrder._Width << " lowerbound=" << BestOrder._WidthLowerBound << " varElimComplexity(log10)=" << BestOrder._Complexity_Log10 << " nRunsStarted=" <<  Context._nRunsStarted << " nRunsCompleted=" << Context._nRunsCompleted << " nImprovements=" << Context._nImprovements << " nTrivialVars=" << Context._MasterGraph._OrderLength << " runtime=" << (tNow - tStart) << "msec" << " nThreads=" << nThreads2Use << std::endl ;
 		std::string sTD ;
 		BucketElimination::MBEworkspace bews ;
 		BestOrder.SerializeTreeDecomposition(*(Context._Problem), bews, true, true, sTD) ;
-//		cout << "c mbews stats : N=" << bews.N() << " nCC=" << bews.Problem()->nConnectedComponents() << " nB=" << bews.nBuckets() << " nVwoB=" << bews.nVarsWithoutBucket() << " maxDTheight=" << bews.MaxTreeHeight() << " nBwoC=" << bews.nBucketsWithNoChildren() << " nRoots=" << bews.nRoots() << std::endl ;
-		cout << sTD ;
-		cout << flush ;
+		if (NULL != fp) {
+			fwrite(sTD.c_str(), 1, sTD.length(), fp) ;
+			fflush(fp) ;
+			}
+		else {
+//			cout << "c mbews stats : N=" << bews.N() << " nCC=" << bews.Problem()->nConnectedComponents() << " nB=" << bews.nBuckets() << " nVwoB=" << bews.nVarsWithoutBucket() << " maxDTheight=" << bews.MaxTreeHeight() << " nBwoC=" << bews.nBucketsWithNoChildren() << " nRoots=" << bews.nRoots() << std::endl ;
+			cout << sTD ;
+			cout << flush ;
+			}
+		if (NULL != fp) 
+			fclose(fp) ;
 		++nTDprintsDone ;
 		}
 
@@ -1125,7 +1177,7 @@ static void handle_signal(int signal)
         case SIGINT:
         case SIGTERM:
 			Context.RequestStopCVOthread() ;
-            SerializeBestOrderTD() ;
+            SerializeBestOrderTD(NULL) ;
 			// wait until print is finished before quitting
 			while (nTDprintsDone <= 0) {
 				SLEEP(1) ;
@@ -1146,6 +1198,7 @@ int main(int argc, char* argv[])
 	int nrunstodo = 1000000000 ;
 	int nArgs = (nParams-1)>>1 ;
 	bool findPracticalVariableOrder = true ;
+	ARE::VarElimOrderComp::ObjectiveToMinimize objCodeSecondary = ARE::VarElimOrderComp::None ;
 	if (1 + 2*nArgs != nParams) {
 		printf("\nBAD COMMAND LINE; will exit ...") ;
 		return 1 ;
@@ -1161,6 +1214,8 @@ int main(int argc, char* argv[])
 			nrunstodo = atoi(sArg.c_str());
 		else if (0 == stricmp("-pvo", sArgID.c_str()))
 			findPracticalVariableOrder = '1' == sArg[0] || 'y' == sArg[0] || 'Y' == sArg[0] ;
+		else if (0 == stricmp("-O2", sArgID.c_str()))
+			objCodeSecondary = (ARE::VarElimOrderComp::ObjectiveToMinimize) atoi(sArg.c_str()) ;
 		}
 	if (nrunstodo < 1) 
 		nrunstodo = 1 ;
@@ -1205,6 +1260,54 @@ int main(int argc, char* argv[])
 	sigaction(SIGUSR1, &sa, NULL) ;
 #endif
 
+#ifdef RUN_FOLDER_PROBLEMS
+	cout << "RUN_FOLDER_PROBLEMS\n" ;
+	std::wstring wfolder(L"D:\\UCI\\PACE-testbed\\problems\\") ;
+	std::string folder = wstringToString(wfolder) ;
+
+	std::wstring wfiles[1024] ; std::string files[1024] ; std::string output[1024] ; int nFiles = 0 ;
+	{
+		HANDLE hFile ;
+		WIN32_FIND_DATA FileInformation ;
+		std::wstring strPattern(wfolder) ;
+		strPattern += L"*" ;
+//		char fn[260] ;
+		hFile = ::FindFirstFile(strPattern.c_str(), &FileInformation) ;
+		if (INVALID_HANDLE_VALUE != hFile) {
+			do {
+				bool isdot = '.' == FileInformation.cFileName[0] ;
+				bool isdir = 0 != (FileInformation.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) ;
+				if (isdir) {
+					}
+				else if (isdot) {
+					}
+				else {
+					wfiles[nFiles] = FileInformation.cFileName ;
+					if (wfiles[nFiles].length() < 4) continue ;
+					std::wstring wEXT(wfiles[nFiles].substr(wfiles[nFiles].length()-3, 3)) ;
+					if (L".gr" != wEXT) continue ;
+					files[nFiles] = folder ;
+					files[nFiles] += wstringToString(wfiles[nFiles]) ;
+					output[nFiles] = files[nFiles] ;
+					output[nFiles].erase(output[nFiles].length()-3) ;
+					output[nFiles] += "-out.td" ;
+					nFiles++ ;
+					}
+				} while(TRUE == ::FindNextFile(hFile, &FileInformation)) ;
+			::FindClose(hFile) ;
+			}
+	}
+	cout << "Processing " << nFiles << " files ..." << "\n" ;
+
+for (int ii = 0 ; ii < nFiles ; ii++) {
+	std::string & fn = files[ii] ;
+	std::string & of = output[ii] ;
+	nTDprintsAttempted = nTDprintsDone = 0 ;
+	problem_filename = fn ;
+	Context.Destroy() ;
+	cout << "Processing " << fn << "\n" ;
+#endif
+
 	int64_t TimeLimitInMilliSeconds = 86400000 ;
 	int nRP = 8 ; double eRP = 0.5 ;
 	bool PerformSingletonConsistencyChecking = false, EliminateSingletonDomainVariables = file_is_uai ? true : false, earlyterminationofbasic_W = true, earlyterminationofbasic_C = false ;
@@ -1216,7 +1319,7 @@ int main(int argc, char* argv[])
 	ARE::VarElimOrderComp::CVOcontext *context = &Context ;
 	tStart = ARE::GetTimeInMilliseconds();
 	int res = ARE::VarElimOrderComp::Compute(problem_filename,
-		ARE::VarElimOrderComp::Width, ARE::VarElimOrderComp::MinFill, 
+		ARE::VarElimOrderComp::Width, ARE::VarElimOrderComp::MinFill, objCodeSecondary, 
 		nThreads2Use, nrunstodo, TimeLimitInMilliSeconds, nRP, eRP,
 		PerformSingletonConsistencyChecking, EliminateSingletonDomainVariables, earlyterminationofbasic_W, earlyterminationofbasic_C, findPracticalVariableOrder, randomGeneratorSeed,
 		BestOrder, context) ;
@@ -1236,7 +1339,11 @@ int main(int argc, char* argv[])
 #endif
 
 	// save best tree decomposition
-	SerializeBestOrderTD() ;
+#ifdef RUN_FOLDER_PROBLEMS
+	SerializeBestOrderTD(&of) ;
+#else
+	SerializeBestOrderTD(NULL) ;
+#endif
 //	std::string sTD ;
 //	BestOrder.SerializeTreeDecomposition(*(Context._Problem), true, sTD) ;
 //	cout << "\n\n" << sTD ;
@@ -1248,6 +1355,16 @@ int main(int argc, char* argv[])
 	while (nTDprintsDone <= 0) {
 		SLEEP(1) ;
 		}
+#ifdef RUN_FOLDER_PROBLEMS
+	}
+FILE *fp_validate = fopen("validate.bat", "w") ;
+for (int ii = 0 ; ii < nFiles ; ii++) {
+	std::string & fn = files[ii] ;
+	std::string & of = output[ii] ;
+	fprintf(fp_validate, "td-validate %s %s\n", fn.c_str(), of.c_str()) ;
+	}
+fflush(fp_validate) ; fclose(fp_validate) ;
+#endif
 
 	return 0 ;
 }
